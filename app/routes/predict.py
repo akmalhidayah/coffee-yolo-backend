@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
@@ -45,7 +46,7 @@ async def predict(file: UploadFile = File(...)) -> dict:
     }
 
 
-def _get_extension(filename: str | None) -> str:
+def _get_extension(filename: Optional[str]) -> str:
     if not filename:
         return ""
     return Path(filename).suffix.lower().lstrip(".")

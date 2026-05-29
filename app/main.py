@@ -1,3 +1,5 @@
+from typing import Dict
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +23,7 @@ app.include_router(predict_router)
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
+def health_check() -> Dict[str, str]:
     return {
         "status": "ok",
         "message": "Coffee Quality API is running",

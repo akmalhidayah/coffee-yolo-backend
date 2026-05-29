@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image
 from ultralytics import YOLO
@@ -11,7 +11,7 @@ class YoloPredictionError(RuntimeError):
     """Raised when the YOLO model cannot produce a valid prediction."""
 
 
-_MODEL: YOLO | None = None
+_MODEL: Optional[YOLO] = None
 
 _CLASS_BY_ID = {
     0: ("Arabica Grade A", "Arabica", "Grade A"),
@@ -151,7 +151,7 @@ def _build_bounding_boxes(
     *,
     image_width: int,
     image_height: int,
-) -> list[dict]:
+) -> List[Dict[str, Any]]:
     bounding_boxes = []
 
     for index in range(len(boxes)):
@@ -177,7 +177,7 @@ def _build_bounding_boxes(
     return bounding_boxes
 
 
-def _get_image_size(image: Path, result: Any) -> tuple[int, int]:
+def _get_image_size(image: Path, result: Any) -> Tuple[int, int]:
     orig_shape = getattr(result, "orig_shape", None)
     if orig_shape and len(orig_shape) >= 2:
         height, width = int(orig_shape[0]), int(orig_shape[1])
@@ -188,7 +188,7 @@ def _get_image_size(image: Path, result: Any) -> tuple[int, int]:
 
 
 def _normalize_box(
-    xyxy: list[float],
+    xyxy: List[float],
     *,
     image_width: int,
     image_height: int,
