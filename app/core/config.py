@@ -12,8 +12,11 @@ class Settings(BaseModel):
     base_dir: Path = Path(__file__).resolve().parents[2]
     upload_dir: Path = base_dir / "uploads"
     model_path: Path = base_dir / "models" / "best.pt"
+    model_backup_path: Path = base_dir / "models" / "best.previous.pt"
+    model_upload_token: str = "coffee-admin-token"
 
     allowed_extensions: Set[str] = {"jpg", "jpeg", "png"}
+    allowed_model_extensions: Set[str] = {"pt"}
 
 
 settings = Settings()

@@ -139,6 +139,11 @@ def _get_model() -> YOLO:
     return _MODEL
 
 
+def reset_model_cache() -> None:
+    global _MODEL
+    _MODEL = None
+
+
 def _best_detection_index(boxes: Any) -> int:
     confidences = boxes.conf
     if hasattr(confidences, "argmax"):

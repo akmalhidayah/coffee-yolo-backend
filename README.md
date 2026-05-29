@@ -14,6 +14,7 @@ models/best.pt
 
 - `GET /health` untuk cek status API.
 - `POST /predict` menerima upload gambar `jpg`, `jpeg`, atau `png`.
+- `POST /models/upload` menerima upload model YOLO `.pt` baru.
 - File upload disimpan ke folder `uploads/`.
 - Response prediction masih dummy random dari 6 kelas:
   - Arabica Grade A
@@ -124,3 +125,27 @@ pillow
 ```
 
 TODO utama ada di `app/services/yolo_service.py`: load `models/best.pt` menggunakan `ultralytics.YOLO`, jalankan inference pada gambar upload, lalu ubah hasil inference ke format JSON yang sama agar Flutter tidak perlu banyak berubah.
+
+## Upload Model Baru
+
+Endpoint upload model:
+
+```text
+POST /models/upload
+```
+
+Header:
+
+```text
+X-Admin-Token: coffee-admin-token
+```
+
+Body form-data:
+
+```text
+file: best.pt
+```
+
+Model lama akan disalin ke `models/best.previous.pt`, lalu file baru dipakai
+sebagai `models/best.pt`. Cache YOLO di-reset agar prediksi berikutnya memakai
+model baru.
