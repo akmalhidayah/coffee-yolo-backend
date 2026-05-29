@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import List, Set
 
@@ -16,6 +17,9 @@ class Settings(BaseModel):
     model_path: Path = base_dir / "models" / "best.pt"
     model_backup_path: Path = base_dir / "models" / "best.previous.pt"
     model_upload_token: str = "coffee-admin-token"
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    jwt_secret: str = os.getenv("JWT_SECRET", "change-this-coffee-secret")
+    jwt_exp_seconds: int = int(os.getenv("JWT_EXP_SECONDS", "604800"))
 
     allowed_extensions: Set[str] = {"jpg", "jpeg", "png"}
     allowed_model_extensions: Set[str] = {"pt"}

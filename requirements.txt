@@ -5,3 +5,4 @@ pydantic
 ultralytics
 opencv-python
 pillow  
+google-auth

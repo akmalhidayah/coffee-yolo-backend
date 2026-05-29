@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.services.google_auth_service import verify_google_token
+from app.services.token_service import create_access_token
 from app.services.user_service import login_user, register_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -20,6 +22,10 @@ class LoginRequest(BaseModel):
     password: str = ""
 
 
+class GoogleLoginRequest(BaseModel):
+    id_token: str = Field(min_length=20)
+
+
 @router.post("/register")
 def register(payload: RegisterRequest) -> dict:
     user = register_user(
@@ -34,6 +40,8 @@ def register(payload: RegisterRequest) -> dict:
         "success": True,
         "message": "Account saved successfully.",
         "data": user,
+        "access_token": create_access_token(user),
+        "token_type": "bearer",
     }
 
 
@@ -50,4 +58,27 @@ def login(payload: LoginRequest) -> dict:
         "success": True,
         "message": "Login successful.",
         "data": user,
+        "access_token": create_access_token(user),
+        "token_type": "bearer",
+    }
+
+
+@router.post("/google")
+def google_login(payload: GoogleLoginRequest) -> dict:
+    token_info = verify_google_token(payload.id_token)
+    email = token_info["email"].strip().lower()
+    name = token_info.get("name") or email.split("@")[0]
+    user = register_user(
+        name=name,
+        email=email,
+        password="",
+        location="Desa Masewe, Mamasa",
+        auth_provider="google",
+    )
+    return {
+        "success": True,
+        "message": "Google login successful.",
+        "data": user,
+        "access_token": create_access_token(user),
+        "token_type": "bearer",
     }

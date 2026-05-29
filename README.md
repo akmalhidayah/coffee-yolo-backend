@@ -86,6 +86,27 @@ Register/login Google dari aplikasi memakai payload yang sama, tetapi
 `auth_provider` bernilai `google` dan `password` boleh kosong. Nomor telepon
 memakai `auth_provider` bernilai `phone`.
 
+Google Sign-In asli memakai endpoint:
+
+```text
+POST /auth/google
+```
+
+Body:
+
+```json
+{
+  "id_token": "GOOGLE_ID_TOKEN_DARI_FLUTTER"
+}
+```
+
+Untuk production, set environment variable berikut di server:
+
+```bash
+GOOGLE_CLIENT_ID=client-id-google-web.apps.googleusercontent.com
+JWT_SECRET=secret-random-yang-panjang
+```
+
 ## Contoh Response `/predict`
 
 ```json
