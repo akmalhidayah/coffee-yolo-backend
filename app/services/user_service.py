@@ -2,7 +2,7 @@ import hashlib
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from app.core.config import settings
 
@@ -36,7 +36,7 @@ def register_user(
     location: str = "Desa Masewe, Mamasa",
     phone: str = "",
     auth_provider: str = "email",
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     init_user_database()
     now = _now()
     normalized_email = email.strip().lower()
@@ -81,7 +81,7 @@ def register_user(
     return serialize_user(get_user_by_email(normalized_email))
 
 
-def login_user(*, email: str, password: str = "") -> Optional[dict[str, Any]]:
+def login_user(*, email: str, password: str = "") -> Optional[Dict[str, Any]]:
     init_user_database()
     user = get_user_by_email(email.strip().lower())
     if user is None:
@@ -103,7 +103,7 @@ def update_profile(
     location: str,
     phone: str = "",
     auth_provider: str = "email",
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     return register_user(
         name=name,
         email=email,
@@ -122,7 +122,7 @@ def get_user_by_email(email: str) -> Optional[sqlite3.Row]:
         ).fetchone()
 
 
-def serialize_user(user: Optional[sqlite3.Row]) -> dict[str, Any]:
+def serialize_user(user: Optional[sqlite3.Row]) -> Dict[str, Any]:
     if user is None:
         return {}
     return {
