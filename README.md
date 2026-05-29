@@ -13,9 +13,13 @@ models/best.pt
 ## Fitur Saat Ini
 
 - `GET /health` untuk cek status API.
+- `POST /auth/register` untuk menyimpan akun email, Google/Gmail, atau nomor telepon.
+- `POST /auth/login` untuk login email/password.
+- `POST /users/profile` untuk menyimpan profil dan lokasi pengguna.
 - `POST /predict` menerima upload gambar `jpg`, `jpeg`, atau `png`.
 - `POST /models/upload` menerima upload model YOLO `.pt` baru.
 - File upload disimpan ke folder `uploads/`.
+- Data akun/profil disimpan ke SQLite di `data/coffee_yolo.db`.
 - Response prediction masih dummy random dari 6 kelas:
   - Arabica Grade A
   - Arabica Grade B
@@ -24,7 +28,9 @@ models/best.pt
   - Robusta Grade B
   - Robusta Grade C
 
-Belum ada database, authentication, atau model YOLO asli.
+Endpoint auth/profile sudah tersedia untuk integrasi aplikasi Flutter. Login Google
+dan nomor telepon dari aplikasi disimpan sebagai akun dengan `auth_provider`
+`google` atau `phone`.
 
 ## Instalasi
 
@@ -59,6 +65,26 @@ Cek health endpoint:
 ```text
 http://127.0.0.1:8000/health
 ```
+
+## Auth dan Profil
+
+Register email/password:
+
+```json
+POST /auth/register
+{
+  "name": "Petani Kopi",
+  "email": "petani@gmail.com",
+  "password": "secret123",
+  "location": "Mamasa",
+  "phone": "",
+  "auth_provider": "email"
+}
+```
+
+Register/login Google dari aplikasi memakai payload yang sama, tetapi
+`auth_provider` bernilai `google` dan `password` boleh kosong. Nomor telepon
+memakai `auth_provider` bernilai `phone`.
 
 ## Contoh Response `/predict`
 

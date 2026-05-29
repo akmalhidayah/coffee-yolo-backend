@@ -11,6 +11,8 @@ class Settings(BaseModel):
 
     base_dir: Path = Path(__file__).resolve().parents[2]
     upload_dir: Path = base_dir / "uploads"
+    data_dir: Path = base_dir / "data"
+    database_path: Path = data_dir / "coffee_yolo.db"
     model_path: Path = base_dir / "models" / "best.pt"
     model_backup_path: Path = base_dir / "models" / "best.previous.pt"
     model_upload_token: str = "coffee-admin-token"
@@ -21,3 +23,4 @@ class Settings(BaseModel):
 
 settings = Settings()
 settings.upload_dir.mkdir(parents=True, exist_ok=True)
+settings.data_dir.mkdir(parents=True, exist_ok=True)
