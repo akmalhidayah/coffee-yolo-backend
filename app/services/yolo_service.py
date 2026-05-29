@@ -97,6 +97,11 @@ def predict_coffee_quality(image_path: str) -> dict:
     class_name, coffee_type, grade = class_info
     confidence_percent = round(confidence * 100, 1)
     status = _STATUS_BY_GRADE[grade]
+    bounding_boxes = _build_bounding_boxes(
+        boxes,
+        image_width=image_width,
+        image_height=image_height,
+    )
 
     return {
         "image_name": image.name,
@@ -112,14 +117,7 @@ def predict_coffee_quality(image_path: str) -> dict:
         ),
         "recommendation": _RECOMMENDATION_BY_GRADE[grade],
         "characteristics": _CHARACTERISTICS_BY_GRADE[grade],
-        "bounding_boxes": [
-            _normalize_box(
-                boxes.xyxy[best_index].tolist(),
-                image_width=image_width,
-                image_height=image_height,
-                confidence=confidence,
-            )
-        ],
+        "bounding_boxes": bounding_boxes,
     }
 
 
@@ -146,6 +144,37 @@ def _best_detection_index(boxes: Any) -> int:
     if hasattr(confidences, "argmax"):
         return int(confidences.argmax().item())
     return max(range(len(confidences)), key=lambda index: float(confidences[index]))
+
+
+def _build_bounding_boxes(
+    boxes: Any,
+    *,
+    image_width: int,
+    image_height: int,
+) -> list[dict]:
+    bounding_boxes = []
+
+    for index in range(len(boxes)):
+        class_id = int(boxes.cls[index].item())
+        class_info = _CLASS_BY_ID.get(class_id)
+        if class_info is None:
+            continue
+
+        class_name, coffee_type, grade = class_info
+        confidence = round(float(boxes.conf[index].item()), 3)
+        bounding_box = _normalize_box(
+            boxes.xyxy[index].tolist(),
+            image_width=image_width,
+            image_height=image_height,
+            confidence=confidence,
+        )
+        bounding_box["label"] = class_name
+        bounding_box["class_name"] = class_name
+        bounding_box["coffee_type"] = coffee_type
+        bounding_box["grade"] = grade
+        bounding_boxes.append(bounding_box)
+
+    return bounding_boxes
 
 
 def _get_image_size(image: Path, result: Any) -> tuple[int, int]:

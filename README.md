@@ -87,12 +87,31 @@ http://127.0.0.1:8000/health
         "y": 0.22,
         "width": 0.3,
         "height": 0.45,
-        "confidence": 0.925
+        "confidence": 0.925,
+        "label": "Arabica Grade A",
+        "class_name": "Arabica Grade A",
+        "coffee_type": "Arabica",
+        "grade": "Grade A"
+      },
+      {
+        "x": 0.62,
+        "y": 0.3,
+        "width": 0.18,
+        "height": 0.24,
+        "confidence": 0.881,
+        "label": "Arabica Grade A",
+        "class_name": "Arabica Grade A",
+        "coffee_type": "Arabica",
+        "grade": "Grade A"
       }
     ]
   }
 }
 ```
+
+`class_name`, `coffee_type`, `grade`, dan `confidence` di level `data` tetap
+mengikuti deteksi dengan confidence tertinggi. Semua objek hasil deteksi YOLO
+dikirim di `bounding_boxes`.
 
 ## Integrasi Model YOLOv11 Nanti
 
