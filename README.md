@@ -1,198 +1,54 @@
-# Coffee Quality YOLO API
 
-Backend FastAPI sementara untuk aplikasi Flutter skripsi:
+---
 
-**Klasifikasi Kualitas Biji Kopi Berdasarkan Citra Digital Dengan Menggunakan Metode YOLOv11**
+# README Backend — `coffee-yolo-backend`
 
-Backend ini masih skeleton/dummy. Model YOLOv11 asli belum diintegrasikan karena dataset masih dalam proses labeling/training. Setelah training selesai, file model dapat diletakkan di:
+```markdown
+# Coffee Quality Detection - Backend
 
-```text
-models/best.pt
-```
+Coffee Quality Detection Backend adalah layanan REST API yang digunakan untuk memproses deteksi dan klasifikasi kualitas biji kopi berdasarkan citra digital menggunakan model YOLOv11. Backend ini dikembangkan menggunakan FastAPI dan berfungsi sebagai penghubung antara aplikasi Flutter dengan model deteksi YOLO.
 
-## Fitur Saat Ini
+Backend menerima input berupa gambar biji kopi dari frontend, melakukan proses prediksi menggunakan model YOLOv11, kemudian mengembalikan hasil klasifikasi dalam bentuk JSON.
 
-- `GET /health` untuk cek status API.
-- `POST /auth/register` untuk menyimpan akun email, Google/Gmail, atau nomor telepon.
-- `POST /auth/login` untuk login email/password.
-- `POST /users/profile` untuk menyimpan profil dan lokasi pengguna.
-- `POST /predict` menerima upload gambar `jpg`, `jpeg`, atau `png`.
-- `POST /models/upload` menerima upload model YOLO `.pt` baru.
-- File upload disimpan ke folder `uploads/`.
-- Data akun/profil disimpan ke SQLite di `data/coffee_yolo.db`.
-- Response prediction masih dummy random dari 6 kelas:
-  - Arabica Grade A
-  - Arabica Grade B
-  - Arabica Grade C
-  - Robusta Grade A
-  - Robusta Grade B
-  - Robusta Grade C
+## Fitur Utama
 
-Endpoint auth/profile sudah tersedia untuk integrasi aplikasi Flutter. Login Google
-dan nomor telepon dari aplikasi disimpan sebagai akun dengan `auth_provider`
-`google` atau `phone`.
+Backend ini memiliki beberapa fitur utama, yaitu:
 
-## Instalasi
+- REST API untuk prediksi kualitas biji kopi.
+- Integrasi model YOLOv11 untuk deteksi objek dan klasifikasi grade.
+- Endpoint health check untuk mengecek status server.
+- Autentikasi pengguna melalui register dan login.
+- Login menggunakan Google.
+- Manajemen data pengguna.
+- Upload model YOLO berformat `.pt`.
+- Penyimpanan file gambar hasil upload.
+- Response prediksi lengkap berupa jenis kopi, grade, confidence score, status kualitas, karakteristik fisik, rekomendasi, dan bounding box.
 
-```powershell
-python -m venv venv
-```
+## Teknologi yang Digunakan
 
-```powershell
-venv\Scripts\activate
-```
+Backend aplikasi ini dikembangkan menggunakan teknologi berikut:
 
-```powershell
-pip install -r requirements.txt
-```
+- Python
+- FastAPI
+- Uvicorn
+- Ultralytics YOLO
+- SQLite
+- Pydantic
+- Python Multipart
+- JWT Authentication
 
-## Menjalankan Server
+## Struktur Folder
 
-Jalankan dari folder `coffee_backend`:
-
-```powershell
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Buka dokumentasi API:
+Struktur utama folder backend adalah sebagai berikut:
 
 ```text
-http://127.0.0.1:8000/docs
-```
-
-Cek health endpoint:
-
-```text
-http://127.0.0.1:8000/health
-```
-
-## Auth dan Profil
-
-Register email/password:
-
-```json
-POST /auth/register
-{
-  "name": "Petani Kopi",
-  "email": "petani@gmail.com",
-  "password": "secret123",
-  "location": "Mamasa",
-  "phone": "",
-  "auth_provider": "email"
-}
-```
-
-Register/login Google dari aplikasi memakai payload yang sama, tetapi
-`auth_provider` bernilai `google` dan `password` boleh kosong. Nomor telepon
-memakai `auth_provider` bernilai `phone`.
-
-Google Sign-In asli memakai endpoint:
-
-```text
-POST /auth/google
-```
-
-Body:
-
-```json
-{
-  "id_token": "GOOGLE_ID_TOKEN_DARI_FLUTTER"
-}
-```
-
-Untuk production, set environment variable berikut di server:
-
-```bash
-GOOGLE_CLIENT_ID=client-id-google-web.apps.googleusercontent.com
-JWT_SECRET=secret-random-yang-panjang
-```
-
-## Contoh Response `/predict`
-
-```json
-{
-  "success": true,
-  "message": "Prediction completed",
-  "data": {
-    "image_name": "uploaded-file.png",
-    "class_name": "Arabica Grade A",
-    "coffee_type": "Arabica",
-    "grade": "Grade A",
-    "confidence": 0.925,
-    "confidence_percent": 92.5,
-    "status": "Kualitas Tinggi",
-    "description": "Biji kopi terdeteksi sebagai Arabica Grade A dengan kualitas tinggi.",
-    "recommendation": "Layak jual kualitas tinggi.",
-    "characteristics": {
-      "bentuk_keutuhan": "Biji utuh dan bentuk relatif seragam.",
-      "ukuran": "Ukuran biji relatif seragam.",
-      "permukaan": "Permukaan biji halus dan baik.",
-      "warna": "Warna biji merata dan tidak terdapat cacat mencolok."
-    },
-    "bounding_boxes": [
-      {
-        "x": 0.35,
-        "y": 0.22,
-        "width": 0.3,
-        "height": 0.45,
-        "confidence": 0.925,
-        "label": "Arabica Grade A",
-        "class_name": "Arabica Grade A",
-        "coffee_type": "Arabica",
-        "grade": "Grade A"
-      },
-      {
-        "x": 0.62,
-        "y": 0.3,
-        "width": 0.18,
-        "height": 0.24,
-        "confidence": 0.881,
-        "label": "Arabica Grade A",
-        "class_name": "Arabica Grade A",
-        "coffee_type": "Arabica",
-        "grade": "Grade A"
-      }
-    ]
-  }
-}
-```
-
-`class_name`, `coffee_type`, `grade`, dan `confidence` di level `data` tetap
-mengikuti deteksi dengan confidence tertinggi. Semua objek hasil deteksi YOLO
-dikirim di `bounding_boxes`.
-
-## Integrasi Model YOLOv11 Nanti
-
-Untuk integrasi model asli, backend kemungkinan akan membutuhkan package tambahan:
-
-```text
-ultralytics
-opencv-python
-pillow
-```
-
-TODO utama ada di `app/services/yolo_service.py`: load `models/best.pt` menggunakan `ultralytics.YOLO`, jalankan inference pada gambar upload, lalu ubah hasil inference ke format JSON yang sama agar Flutter tidak perlu banyak berubah.
-
-## Upload Model Baru
-
-Endpoint upload model:
-
-```text
-POST /models/upload
-```
-
-Header:
-
-```text
-X-Admin-Token: coffee-admin-token
-```
-
-Body form-data:
-
-```text
-file: best.pt
-```
-
-Model lama akan disalin ke `models/best.previous.pt`, lalu file baru dipakai
-sebagai `models/best.pt`. Cache YOLO di-reset agar prediksi berikutnya memakai
-model baru.
+coffee-yolo-backend/
+├── app/
+│   ├── core/          # Konfigurasi aplikasi
+│   ├── routes/        # Endpoint API
+│   ├── services/      # Service prediksi, user, dan model
+│   └── main.py        # Entry point FastAPI
+├── models/            # Folder penyimpanan model YOLO
+├── uploads/           # Folder penyimpanan gambar yang diunggah
+├── requirements.txt   # Dependency Python
+└── README.md
