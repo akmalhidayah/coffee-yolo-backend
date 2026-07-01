@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.services.google_auth_service import verify_google_token
 from app.services.token_service import create_access_token
-from app.services.user_service import login_user, register_user
+from app.services.user_service import login_user, mark_user_login, register_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -75,6 +75,7 @@ def google_login(payload: GoogleLoginRequest) -> dict:
         location="Desa Masewe, Mamasa",
         auth_provider="google",
     )
+    user = mark_user_login(user["id"])
     return {
         "success": True,
         "message": "Google login successful.",

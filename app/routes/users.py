@@ -1,6 +1,9 @@
-from fastapi import APIRouter
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.services.token_service import get_current_user
 from app.services.user_service import update_profile
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -15,13 +18,17 @@ class ProfileRequest(BaseModel):
 
 
 @router.post("/profile")
-def save_profile(payload: ProfileRequest) -> dict:
+def save_profile(
+    payload: ProfileRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> dict:
     user = update_profile(
         name=payload.name,
         email=payload.email,
         location=payload.location,
         phone=payload.phone,
         auth_provider=payload.auth_provider,
+        user_id=current_user["id"],
     )
     return {
         "success": True,

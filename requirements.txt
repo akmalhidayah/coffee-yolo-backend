@@ -4,5 +4,7 @@ python-multipart
 pydantic
 ultralytics
 opencv-python
-pillow  
+pillow
 google-auth
+passlib[bcrypt]
+python-dotenv

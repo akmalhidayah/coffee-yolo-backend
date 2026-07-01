@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,6 +10,10 @@ from app.core.config import settings
 
 class YoloPredictionError(RuntimeError):
     """Raised when the YOLO model cannot produce a valid prediction."""
+
+
+class YoloModelNotAvailableError(YoloPredictionError):
+    """Raised when the YOLO model file is not available."""
 
 
 _MODEL: Optional[YOLO] = None
@@ -71,7 +76,12 @@ def predict_coffee_quality(image_path: str) -> dict:
 
     try:
         model = _get_model()
-        results = model.predict(source=str(image), verbose=False)
+        # Threshold ini mengurangi false detection pada background atau objek non-kopi.
+        results = model.predict(
+            source=str(image),
+            conf=settings.confidence_threshold,
+            verbose=False,
+        )
     except YoloPredictionError:
         raise
     except Exception as exc:
@@ -86,38 +96,42 @@ def predict_coffee_quality(image_path: str) -> dict:
         return _not_detected_response(image.name)
 
     image_width, image_height = _get_image_size(image, first_result)
-    best_index = _best_detection_index(boxes)
-    class_id = int(boxes.cls[best_index].item())
-    confidence = round(float(boxes.conf[best_index].item()), 3)
-
-    class_info = _CLASS_BY_ID.get(class_id)
-    if class_info is None:
-        return _not_detected_response(image.name)
-
-    class_name, coffee_type, grade = class_info
-    confidence_percent = round(confidence * 100, 1)
-    status = _STATUS_BY_GRADE[grade]
-    bounding_boxes = _build_bounding_boxes(
+    detections = _build_detections(
         boxes,
         image_width=image_width,
         image_height=image_height,
     )
+    if not detections:
+        return _not_detected_response(image.name)
+
+    best_detection = max(detections, key=lambda detection: detection["confidence"])
+    confidence = best_detection["confidence"]
+    confidence_percent = round(confidence * 100, 1)
+    grade = best_detection["grade"]
+    status = _STATUS_BY_GRADE[grade]
+    bounding_boxes = [detection["bounding_box"] for detection in detections]
 
     return {
         "image_name": image.name,
-        "class_name": class_name,
-        "coffee_type": coffee_type,
+        "class_name": best_detection["class_name"],
+        "coffee_type": best_detection["coffee_type"],
         "grade": grade,
         "confidence": confidence,
         "confidence_percent": confidence_percent,
         "status": status,
+        "detection_status": "detected",
+        "message": "Biji kopi berhasil terdeteksi.",
         "description": (
-            f"Biji kopi terdeteksi sebagai {class_name} "
+            f"Biji kopi terdeteksi sebagai {best_detection['class_name']} "
             f"dengan {status.lower()}."
         ),
         "recommendation": _RECOMMENDATION_BY_GRADE[grade],
         "characteristics": _CHARACTERISTICS_BY_GRADE[grade],
         "bounding_boxes": bounding_boxes,
+        "detections": detections,
+        "total_detected": len(detections),
+        "confidence_threshold": settings.confidence_threshold,
+        "detected_at": best_detection["detected_at"],
     }
 
 
@@ -129,12 +143,12 @@ def _get_model() -> YOLO:
 
     model_path = settings.model_path
     if not model_path.exists():
-        raise YoloPredictionError(f"YOLO model file not found: {model_path}")
+        raise YoloModelNotAvailableError(f"YOLO model file not found: {model_path}")
 
     try:
         _MODEL = YOLO(str(model_path))
     except Exception as exc:
-        raise YoloPredictionError(f"Failed to load YOLO model: {exc}") from exc
+        raise YoloModelNotAvailableError(f"Failed to load YOLO model: {exc}") from exc
 
     return _MODEL
 
@@ -144,29 +158,25 @@ def reset_model_cache() -> None:
     _MODEL = None
 
 
-def _best_detection_index(boxes: Any) -> int:
-    confidences = boxes.conf
-    if hasattr(confidences, "argmax"):
-        return int(confidences.argmax().item())
-    return max(range(len(confidences)), key=lambda index: float(confidences[index]))
-
-
-def _build_bounding_boxes(
+def _build_detections(
     boxes: Any,
     *,
     image_width: int,
     image_height: int,
 ) -> List[Dict[str, Any]]:
-    bounding_boxes = []
+    detections = []
 
     for index in range(len(boxes)):
+        confidence = round(float(boxes.conf[index].item()), 3)
+        if confidence < settings.confidence_threshold:
+            continue
+
         class_id = int(boxes.cls[index].item())
         class_info = _CLASS_BY_ID.get(class_id)
         if class_info is None:
             continue
 
         class_name, coffee_type, grade = class_info
-        confidence = round(float(boxes.conf[index].item()), 3)
         bounding_box = _normalize_box(
             boxes.xyxy[index].tolist(),
             image_width=image_width,
@@ -177,9 +187,27 @@ def _build_bounding_boxes(
         bounding_box["class_name"] = class_name
         bounding_box["coffee_type"] = coffee_type
         bounding_box["grade"] = grade
-        bounding_boxes.append(bounding_box)
+        detected_at = datetime.now(timezone.utc).isoformat()
+        detections.append(
+            {
+                "label": class_name,
+                "class_name": class_name,
+                "coffee_type": coffee_type,
+                "jenis_kopi": coffee_type,
+                "grade": grade,
+                "confidence": confidence,
+                "confidence_percent": round(confidence * 100, 1),
+                "bbox": bounding_box,
+                "bounding_box": bounding_box,
+                "recommendation": _RECOMMENDATION_BY_GRADE[grade],
+                "rekomendasi": _RECOMMENDATION_BY_GRADE[grade],
+                "characteristics": _CHARACTERISTICS_BY_GRADE[grade],
+                "karakteristik": _CHARACTERISTICS_BY_GRADE[grade],
+                "detected_at": detected_at,
+            }
+        )
 
-    return bounding_boxes
+    return detections
 
 
 def _get_image_size(image: Path, result: Any) -> Tuple[int, int]:
@@ -225,10 +253,18 @@ def _not_detected_response(image_name: str) -> dict:
         "confidence": 0,
         "confidence_percent": 0,
         "status": "Tidak Terdeteksi",
+        "detection_status": "not_detected",
+        "message": (
+            "Tidak ada biji kopi terdeteksi. Silakan ambil gambar ulang dengan "
+            "pencahayaan yang cukup dan objek biji kopi terlihat jelas."
+        ),
         "description": "Objek biji kopi tidak terdeteksi pada gambar.",
         "recommendation": (
             "Gunakan gambar biji kopi yang lebih jelas dengan pencahayaan cukup."
         ),
         "characteristics": _DEFAULT_CHARACTERISTICS,
         "bounding_boxes": [],
+        "detections": [],
+        "total_detected": 0,
+        "confidence_threshold": settings.confidence_threshold,
     }
