@@ -13,6 +13,18 @@ from app.core.config import settings
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+class DuplicateEmailError(RuntimeError):
+    """Raised when an email address already belongs to an account."""
+
+
+class InactiveAccountError(RuntimeError):
+    """Raised when an inactive account attempts an authenticated action."""
+
+
+class UserNotFoundError(RuntimeError):
+    """Raised when the requested user no longer exists."""
+
+
 def init_user_database() -> None:
     with _connect() as connection:
         connection.execute(
@@ -70,49 +82,27 @@ def register_user(
     now = _now()
     normalized_email = email.strip().lower()
     existing = get_user_by_email(normalized_email)
-    user_id = existing["id"] if existing else str(uuid.uuid4())
+    if existing is not None:
+        raise DuplicateEmailError("Email sudah terdaftar.")
+    user_id = str(uuid.uuid4())
     password_hash = _hash_password(password)
-    role = existing["role"] if existing else "user"
-
     with _connect() as connection:
-        connection.execute(
-            """
+        try:
+            connection.execute(
+                """
             INSERT INTO users (
                 id, name, email, password_hash, location, phone,
                 auth_provider, language, role, is_active, last_login_at,
                 last_seen_at, created_at, updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(email) DO UPDATE SET
-                name = excluded.name,
-                password_hash = CASE
-                    WHEN excluded.password_hash = '' THEN users.password_hash
-                    ELSE excluded.password_hash
-                END,
-                location = excluded.location,
-                phone = excluded.phone,
-                auth_provider = excluded.auth_provider,
-                role = users.role,
-                is_active = 1,
-                updated_at = excluded.updated_at
             """,
-            (
-                user_id,
-                name.strip(),
-                normalized_email,
-                password_hash,
-                location.strip(),
-                phone.strip(),
-                auth_provider.strip() or "email",
-                existing["language"] if existing else "Indonesia",
-                role,
-                1,
-                existing["last_login_at"] if existing else None,
-                existing["last_seen_at"] if existing else None,
-                existing["created_at"] if existing else now,
-                now,
-            ),
-        )
+                (user_id, name.strip(), normalized_email, password_hash,
+                 location.strip(), phone.strip(), auth_provider.strip() or "email",
+                 "Indonesia", "user", 1, None, None, now, now),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateEmailError("Email sudah terdaftar.") from exc
         connection.commit()
 
     return serialize_user(get_user_by_email(normalized_email))
@@ -127,6 +117,8 @@ def login_user(*, email: str, password: str = "") -> Optional[Dict[str, Any]]:
     verified, needs_upgrade = _verify_password(password, user["password_hash"])
     if not verified:
         return None
+    if not bool(user["is_active"]):
+        raise InactiveAccountError("Akun dinonaktifkan.")
 
     now = _now()
     new_hash = _hash_password(password) if needs_upgrade else user["password_hash"]
@@ -134,8 +126,7 @@ def login_user(*, email: str, password: str = "") -> Optional[Dict[str, Any]]:
         connection.execute(
             """
             UPDATE users
-            SET password_hash = ?, last_login_at = ?, last_seen_at = ?,
-                is_active = 1, updated_at = ?
+            SET password_hash = ?, last_login_at = ?, last_seen_at = ?, updated_at = ?
             WHERE id = ?
             """,
             (new_hash, now, now, now, user["id"]),
@@ -151,40 +142,46 @@ def update_profile(
     email: str,
     location: str,
     phone: str = "",
-    auth_provider: str = "email",
-    user_id: Optional[str] = None,
+    user_id: str,
 ) -> Dict[str, Any]:
     init_user_database()
+    current_user = get_user_by_id(user_id)
+    if current_user is None:
+        raise UserNotFoundError("User tidak ditemukan.")
+    normalized_email = email.strip().lower()
+    email_owner = get_user_by_email(normalized_email)
+    if email_owner is not None and email_owner["id"] != user_id:
+        raise DuplicateEmailError("Email sudah digunakan oleh akun lain.")
     now = _now()
     with _connect() as connection:
-        if user_id:
+        try:
             connection.execute(
                 """
                 UPDATE users
-                SET name = ?, email = ?, location = ?, phone = ?,
-                    auth_provider = ?, updated_at = ?
+                SET name = ?, email = ?, location = ?, phone = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (
-                    name.strip(),
-                    email.strip().lower(),
-                    location.strip(),
-                    phone.strip(),
-                    auth_provider.strip() or "email",
-                    now,
-                    user_id,
-                ),
+                (name.strip(), normalized_email, location.strip(), phone.strip(), now, user_id),
             )
-            connection.commit()
-            return serialize_user(get_user_by_id(user_id))
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateEmailError("Email sudah digunakan oleh akun lain.") from exc
+        connection.commit()
+    return serialize_user(get_user_by_id(user_id))
 
+
+def get_or_create_google_user(
+    *, name: str, email: str, location: str = "Desa Masewe, Mamasa"
+) -> Dict[str, Any]:
+    init_user_database()
+    normalized_email = email.strip().lower()
+    existing = get_user_by_email(normalized_email)
+    if existing is not None:
+        if not bool(existing["is_active"]):
+            raise InactiveAccountError("Akun dinonaktifkan.")
+        return serialize_user(existing)
     return register_user(
-        name=name,
-        email=email,
-        password="",
-        location=location,
-        phone=phone,
-        auth_provider=auth_provider,
+        name=name, email=normalized_email, password="", location=location,
+        auth_provider="google",
     )
 
 
@@ -208,19 +205,24 @@ def mark_user_seen(user_id: str) -> None:
     now = _now()
     with _connect() as connection:
         connection.execute(
-            "UPDATE users SET last_seen_at = ?, is_active = 1, updated_at = ? WHERE id = ?",
+            "UPDATE users SET last_seen_at = ?, updated_at = ? WHERE id = ?",
             (now, now, user_id),
         )
         connection.commit()
 
 
 def mark_user_login(user_id: str) -> Dict[str, Any]:
+    user = get_user_by_id(user_id)
+    if user is None:
+        raise UserNotFoundError("User tidak ditemukan.")
+    if not bool(user["is_active"]):
+        raise InactiveAccountError("Akun dinonaktifkan.")
     now = _now()
     with _connect() as connection:
         connection.execute(
             """
             UPDATE users
-            SET last_login_at = ?, last_seen_at = ?, is_active = 1, updated_at = ?
+            SET last_login_at = ?, last_seen_at = ?, updated_at = ?
             WHERE id = ?
             """,
             (now, now, now, user_id),
@@ -256,11 +258,6 @@ def record_prediction_history(
 ) -> None:
     init_user_database()
     detections = prediction.get("detections") or []
-    best_detection = (
-        max(detections, key=lambda detection: detection.get("confidence", 0))
-        if detections
-        else {}
-    )
     with _connect() as connection:
         connection.execute(
             """
@@ -274,10 +271,10 @@ def record_prediction_history(
                 user_id,
                 image_filename,
                 response_status,
-                best_detection.get("class_name") if response_status == "detected" else None,
-                best_detection.get("coffee_type") if response_status == "detected" else None,
-                best_detection.get("grade") if response_status == "detected" else None,
-                best_detection.get("confidence") if response_status == "detected" else None,
+                prediction.get("class_name") if response_status == "detected" else None,
+                prediction.get("coffee_type") if response_status == "detected" else None,
+                prediction.get("grade") if response_status == "detected" else None,
+                prediction.get("confidence") if response_status == "detected" else None,
                 json.dumps(prediction.get("bounding_boxes") or [], ensure_ascii=False),
                 json.dumps(detections, ensure_ascii=False),
                 _now(),
@@ -343,6 +340,12 @@ def _seed_initial_admin(connection: sqlite3.Connection) -> None:
     ).fetchone()
     if admin_exists:
         return
+    email_exists = connection.execute(
+        "SELECT id FROM users WHERE email = ? LIMIT 1",
+        (settings.admin_email,),
+    ).fetchone()
+    if email_exists:
+        return
 
     now = _now()
     admin_id = str(uuid.uuid4())
@@ -354,11 +357,6 @@ def _seed_initial_admin(connection: sqlite3.Connection) -> None:
             created_at, updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(email) DO UPDATE SET
-            password_hash = excluded.password_hash,
-            role = 'admin',
-            is_active = 1,
-            updated_at = excluded.updated_at
         """,
         (
             admin_id,

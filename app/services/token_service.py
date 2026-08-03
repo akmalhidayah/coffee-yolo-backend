@@ -8,7 +8,12 @@ from typing import Any, Dict, Optional
 from fastapi import Depends, Header, HTTPException, status
 
 from app.core.config import settings
-from app.services.user_service import get_user_by_id, mark_user_seen, serialize_user
+from app.services.user_service import (
+    InactiveAccountError,
+    get_user_by_id,
+    mark_user_seen,
+    serialize_user,
+)
 
 
 def create_access_token(user: Dict[str, Any]) -> str:
@@ -68,6 +73,8 @@ def authenticate_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
     user = get_user_by_id(str(payload.get("sub", "")))
     if user is None:
         raise ValueError("User token tidak ditemukan.")
+    if not bool(user["is_active"]):
+        raise InactiveAccountError("Akun dinonaktifkan.")
     mark_user_seen(str(user["id"]))
     return serialize_user(get_user_by_id(str(user["id"])))
 
@@ -75,6 +82,11 @@ def authenticate_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
 def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     try:
         return authenticate_bearer_token(authorization)
+    except InactiveAccountError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -90,6 +102,11 @@ def get_optional_current_user(
         return None
     try:
         return authenticate_bearer_token(authorization)
+    except InactiveAccountError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

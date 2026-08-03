@@ -40,7 +40,6 @@ class Settings(BaseModel):
     database_path: Path = data_dir / "coffee_yolo.db"
     model_path: Path = _path_env("MODEL_PATH", BASE_DIR / "models" / "best.pt")
     model_backup_path: Path = BASE_DIR / "models" / "best.previous.pt"
-    model_upload_token: str = os.getenv("ADMIN_UPLOAD_TOKEN", "")
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     jwt_secret: str = os.getenv(
         "JWT_SECRET_KEY",
@@ -57,6 +56,7 @@ class Settings(BaseModel):
     admin_password: str = os.getenv("ADMIN_PASSWORD", "")
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
     max_image_size_mb: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
+    max_model_size_mb: int = int(os.getenv("MAX_MODEL_SIZE_MB", "200"))
     online_user_window_minutes: int = int(os.getenv("ONLINE_USER_WINDOW_MINUTES", "10"))
 
     allowed_extensions: Set[str] = {"jpg", "jpeg", "png"}
@@ -69,6 +69,10 @@ class Settings(BaseModel):
     @property
     def max_image_size_bytes(self) -> int:
         return self.max_image_size_mb * 1024 * 1024
+
+    @property
+    def max_model_size_bytes(self) -> int:
+        return self.max_model_size_mb * 1024 * 1024
 
 
 settings = Settings()

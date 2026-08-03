@@ -35,10 +35,10 @@ curl http://localhost:8000/health
 ```env
 CONFIDENCE_THRESHOLD=0.5
 MAX_IMAGE_SIZE_MB=5
+MAX_MODEL_SIZE_MB=200
 
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=ganti-password-admin
-ADMIN_UPLOAD_TOKEN=
 
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8080
 
@@ -53,7 +53,14 @@ ONLINE_USER_WINDOW_MINUTES=10
 GOOGLE_CLIENT_ID=
 ```
 
-`ADMIN_UPLOAD_TOKEN` hanya fallback sementara. Untuk production gunakan JWT role admin.
+Upload model hanya menerima `Authorization: Bearer <JWT>` dari akun admin yang
+masih aktif. Header `X-Admin-Token` tidak didukung.
+
+File `.pt` hanya boleh berasal dari sumber yang dipercaya. Validasi struktur
+model tidak menjamin checkpoint dari sumber tidak terpercaya aman untuk
+dideserialisasi. Untuk aplikasi skripsi ini, upload dibatasi hanya kepada akun
+admin aktif. Migrasi ke format seperti ONNX dapat dipertimbangkan sebagai
+pengembangan keamanan lanjutan.
 
 ## Membuat Admin Awal
 
