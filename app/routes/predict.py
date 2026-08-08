@@ -73,6 +73,8 @@ async def predict(
         "total_detected": prediction.get("total_detected", 0),
         "confidence_threshold": settings.confidence_threshold,
         "summary": prediction.get("summary", {}),
+        "input_info": prediction.get("input_info", {}),
+        "inference_parameters": prediction.get("inference_parameters", {}),
         "data": prediction,
     }
 

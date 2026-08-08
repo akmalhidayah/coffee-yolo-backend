@@ -1,16 +1,20 @@
+import logging
 import os
 import shutil
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 from ultralytics import YOLO
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class YoloPredictionError(RuntimeError):
@@ -97,35 +101,64 @@ def predict_coffee_quality(image_path: str) -> Dict[str, Any]:
     image = Path(image_path)
     if not image.exists():
         raise YoloPredictionError("File gambar tidak ditemukan.")
+    prepared_image: Optional[Image.Image] = None
     try:
+        prepared_image, input_info = prepare_inference_image(image)
         model = _get_model()
+        inference_started = time.perf_counter()
         results = model.predict(
-            source=str(image), conf=settings.confidence_threshold, verbose=False
+            source=prepared_image,
+            conf=settings.confidence_threshold,
+            imgsz=settings.yolo_image_size,
+            iou=settings.yolo_iou_threshold,
+            max_det=settings.yolo_max_detections,
+            device=settings.yolo_device,
+            half=False,
+            augment=False,
+            verbose=False,
         )
+        inference_ms = (time.perf_counter() - inference_started) * 1000
     except YoloPredictionError:
         raise
     except Exception as exc:
+        # Log a sanitized exception so third-party exception text cannot expose
+        # tokens, paths, or other request data.
+        try:
+            raise RuntimeError(
+                f"Internal prediction failure ({type(exc).__name__})."
+            ) from None
+        except RuntimeError:
+            logger.exception("Prediction failed image=%s", image.name)
         raise YoloPredictionError("Prediksi tidak dapat diproses.") from exc
+    finally:
+        if prepared_image is not None:
+            prepared_image.close()
 
     if not results or getattr(results[0], "boxes", None) is None:
-        return _not_detected_response(image.name)
+        response = _not_detected_response(image.name, input_info=input_info)
+        _log_prediction(image.name, input_info, response, inference_ms)
+        return response
     boxes = results[0].boxes
     if len(boxes) == 0:
-        return _not_detected_response(image.name)
+        response = _not_detected_response(image.name, input_info=input_info)
+        _log_prediction(image.name, input_info, response, inference_ms)
+        return response
 
-    width, height = _get_image_size(image, results[0])
+    width, height = _get_image_size(input_info, results[0])
     detected_at = datetime.now(timezone.utc).isoformat()
     detections = _build_detections(
         boxes, image_width=width, image_height=height, detected_at=detected_at
     )
     if not detections:
-        return _not_detected_response(image.name)
+        response = _not_detected_response(image.name, input_info=input_info)
+        _log_prediction(image.name, input_info, response, inference_ms)
+        return response
 
     aggregate = aggregate_detections(detections)
     grade = aggregate["grade"]
     dominant_count = aggregate["summary"]["dominant_count"]
     total = aggregate["summary"]["total"]
-    return {
+    response = {
         "image_name": image.name,
         **aggregate,
         "status": _STATUS_BY_GRADE[grade],
@@ -149,6 +182,31 @@ def predict_coffee_quality(image_path: str) -> Dict[str, Any]:
         "confidence_threshold": settings.confidence_threshold,
         "detected_at": detected_at,
         "aggregation_method": "majority_count_then_confidence",
+        "input_info": input_info,
+        "inference_parameters": _inference_parameters(),
+    }
+    _log_prediction(image.name, input_info, response, inference_ms)
+    return response
+
+
+def prepare_inference_image(
+    image_path: Path,
+) -> Tuple[Image.Image, Dict[str, Any]]:
+    """Normalize EXIF orientation in memory without rewriting the upload."""
+    with Image.open(image_path) as source:
+        original_width, original_height = source.size
+        exif_orientation = source.getexif().get(274)
+        transposed = ImageOps.exif_transpose(source)
+        prepared = transposed.convert("RGB").copy()
+    inference_width, inference_height = prepared.size
+    return prepared, {
+        "original_width": original_width,
+        "original_height": original_height,
+        "inference_width": inference_width,
+        "inference_height": inference_height,
+        "exif_orientation": exif_orientation,
+        "exif_transposed": exif_orientation not in (None, 1),
+        "file_size_bytes": image_path.stat().st_size,
     }
 
 
@@ -351,7 +409,11 @@ def _empty_summary() -> Dict[str, Any]:
     }
 
 
-def _not_detected_response(image_name: str) -> Dict[str, Any]:
+def _not_detected_response(
+    image_name: str,
+    *,
+    input_info: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     return {
         "image_name": image_name, "class_name": "Tidak Terdeteksi",
         "coffee_type": "-", "grade": "-", "confidence": 0.0,
@@ -369,15 +431,55 @@ def _not_detected_response(image_name: str) -> Dict[str, Any]:
         "confidence_threshold": settings.confidence_threshold,
         "aggregation_method": "majority_count_then_confidence",
         "summary": _empty_summary(),
+        "input_info": input_info or {},
+        "inference_parameters": _inference_parameters(),
     }
 
 
-def _get_image_size(image: Path, result: Any) -> Tuple[int, int]:
+def _inference_parameters() -> Dict[str, Any]:
+    return {
+        "confidence_threshold": settings.confidence_threshold,
+        "image_size": settings.yolo_image_size,
+        "iou_threshold": settings.yolo_iou_threshold,
+        "max_detections": settings.yolo_max_detections,
+        "device": settings.yolo_device,
+        "half": False,
+        "augment": False,
+    }
+
+
+def _log_prediction(
+    image_name: str,
+    input_info: Dict[str, Any],
+    response: Dict[str, Any],
+    inference_ms: float,
+) -> None:
+    class_counts = response.get("summary", {}).get("class_counts", {})
+    logger.info(
+        "Prediction completed image=%s bytes=%d original=%dx%d "
+        "inference=%dx%d exif_transposed=%s conf=%.2f imgsz=%d "
+        "iou=%.2f detections=%d class_counts=%s inference_ms=%.1f",
+        image_name,
+        input_info.get("file_size_bytes", 0),
+        input_info.get("original_width", 0),
+        input_info.get("original_height", 0),
+        input_info.get("inference_width", 0),
+        input_info.get("inference_height", 0),
+        input_info.get("exif_transposed", False),
+        settings.confidence_threshold,
+        settings.yolo_image_size,
+        settings.yolo_iou_threshold,
+        response.get("total_detected", 0),
+        class_counts,
+        inference_ms,
+    )
+
+
+def _get_image_size(input_info: Dict[str, Any], result: Any) -> Tuple[int, int]:
     shape = getattr(result, "orig_shape", None)
     if shape and len(shape) >= 2:
         return int(shape[1]), int(shape[0])
-    with Image.open(image) as uploaded:
-        return uploaded.size
+    return int(input_info["inference_width"]), int(input_info["inference_height"])
 
 
 def _normalize_box(

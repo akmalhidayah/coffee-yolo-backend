@@ -34,7 +34,11 @@ curl http://localhost:8000/health
 
 ```env
 CONFIDENCE_THRESHOLD=0.5
-MAX_IMAGE_SIZE_MB=5
+MAX_IMAGE_SIZE_MB=20
+YOLO_IMAGE_SIZE=640
+YOLO_IOU_THRESHOLD=0.70
+YOLO_MAX_DETECTIONS=300
+YOLO_DEVICE=cpu
 MAX_MODEL_SIZE_MB=200
 
 ADMIN_EMAIL=admin@example.com
@@ -153,7 +157,15 @@ Validasi gambar:
 - Ekstensi hanya `.jpg`, `.jpeg`, `.png`.
 - MIME type hanya `image/jpeg` atau `image/png`.
 - File harus bisa dibuka sebagai gambar dengan Pillow.
-- Ukuran maksimal default 5 MB.
+- Ukuran maksimal default 20 MB agar foto asli kamera tidak perlu dikompresi.
+
+Backend mempertahankan byte file upload asli, lalu menormalisasi orientasi EXIF
+dan mode RGB di memory sebelum inference. Tidak ada resize manual, encode ulang
+JPEG, filter warna, sharpening, atau enhancement. Model YOLO tetap menentukan
+kelas; karakteristik dan rekomendasi tetap dibuat oleh aturan sistem dari hasil
+grade. Parameter inference production eksplisit: confidence `0.5`, image size
+`640`, IoU `0.70`, maksimum `300` detection, device `cpu`, `half=false`, dan
+`augment=false`.
 
 ## Response Detected
 

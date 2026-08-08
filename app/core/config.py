@@ -55,7 +55,11 @@ class Settings(BaseModel):
     admin_email: str = os.getenv("ADMIN_EMAIL", "").strip().lower()
     admin_password: str = os.getenv("ADMIN_PASSWORD", "")
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
-    max_image_size_mb: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
+    max_image_size_mb: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "20"))
+    yolo_image_size: int = int(os.getenv("YOLO_IMAGE_SIZE", "640"))
+    yolo_iou_threshold: float = float(os.getenv("YOLO_IOU_THRESHOLD", "0.70"))
+    yolo_max_detections: int = int(os.getenv("YOLO_MAX_DETECTIONS", "300"))
+    yolo_device: str = os.getenv("YOLO_DEVICE", "cpu").strip() or "cpu"
     max_model_size_mb: int = int(os.getenv("MAX_MODEL_SIZE_MB", "200"))
     online_user_window_minutes: int = int(os.getenv("ONLINE_USER_WINDOW_MINUTES", "10"))
 
